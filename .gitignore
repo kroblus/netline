@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+.idea/
+captures/
+docs/phone-*
+docs/real-traffic-report.png
+*.log
+dist/

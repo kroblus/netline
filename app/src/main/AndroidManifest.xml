@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application android:name=".NetlineApp" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:label="NETLINE"
+        android:icon="@drawable/ic_netline" android:theme="@style/Theme.Netline" android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".monitor.MonitorService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started device traffic recording using local TrafficStats counters, and an explicitly enabled visible floating start/stop control while using other apps. Idle control performs no traffic sampling. Both are immediately stoppable from the app and notification." />
+        </service>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.exports"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/export_paths" />
+        </provider>
+    </application>
+</manifest>
