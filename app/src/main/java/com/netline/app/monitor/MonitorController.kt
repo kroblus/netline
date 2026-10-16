@@ -5,6 +5,8 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.netline.app.data.Sample
+import com.netline.app.R
+import com.netline.app.localizedString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -43,7 +45,7 @@ class MonitorController(private val context: Context) {
                 update { it.copy(recordingState = RecordingState.STOPPING) }
             }
             ENABLE -> {
-                if (!Settings.canDrawOverlays(context)) { fail("请先授予悬浮窗权限 / Overlay permission required"); return }
+                if (!Settings.canDrawOverlays(context)) { fail(context.localizedString(R.string.permission_overlay)); return }
                 update { it.copy(overlayEnabled = true) }
             }
         }
@@ -56,7 +58,7 @@ class MonitorController(private val context: Context) {
         } catch (e: Exception) {
             update { it.copy(recordingState = if (it.activeSessionId == null) RecordingState.IDLE else RecordingState.RECORDING,
                 overlayEnabled = if (action == ENABLE) false else it.overlayEnabled,
-                error = "系统无法启动服务，请回到 NETLINE 重试：${e.localizedMessage}") }
+                error = context.localizedString(R.string.service_start_error, e.localizedMessage ?: "")) }
         }
     }
     internal fun fail(message: String) = update { it.copy(error = message) }

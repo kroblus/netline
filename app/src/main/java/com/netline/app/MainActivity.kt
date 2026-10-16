@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         if (pendingOverlay) {
             pendingOverlay = false
             if (Settings.canDrawOverlays(this)) app.monitor.request(MonitorController.ENABLE)
-            else Toast.makeText(this, "悬浮球需要单独授权；主界面记录仍可用", Toast.LENGTH_LONG).show()
+            else Toast.makeText(this, localizedString(R.string.permission_denied), Toast.LENGTH_LONG).show()
         }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
             else {
                 pendingOverlay = true
                 try { overlayPermission.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
-                catch (_: Exception) { pendingOverlay = false; Toast.makeText(this, "无法打开权限设置，请从系统应用设置授权", Toast.LENGTH_LONG).show() }
+                catch (_: Exception) { pendingOverlay = false; Toast.makeText(this, localizedString(R.string.permission_settings_error), Toast.LENGTH_LONG).show() }
             }
         }
     }

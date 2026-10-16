@@ -75,6 +75,18 @@ interface TrafficDao {
     suspend fun aggregates(session: Long): List<MinuteAggregate>
     @Query("DELETE FROM samples WHERE endedAt < :cutoff AND sessionId IN (SELECT id FROM sessions WHERE endedAt IS NOT NULL)")
     suspend fun prune(cutoff: Long)
+    @Query("SELECT COUNT(*) FROM sessions WHERE id = :id AND endedAt IS NOT NULL")
+    suspend fun endedSessionExists(id: Long): Int
+    @Query("DELETE FROM samples WHERE sessionId = :id") suspend fun deleteSamples(id: Long)
+    @Query("DELETE FROM minute_aggregates WHERE sessionId = :id") suspend fun deleteAggregates(id: Long)
+    @Query("DELETE FROM sessions WHERE id = :id AND endedAt IS NOT NULL") suspend fun deleteEndedRow(id: Long): Int
+    @Transaction
+    suspend fun deleteEndedSession(id: Long): Boolean {
+        if (endedSessionExists(id) != 1) return false
+        deleteSamples(id)
+        deleteAggregates(id)
+        return deleteEndedRow(id) == 1
+    }
 }
 
 @Database(entities = [Session::class, Sample::class, MinuteAggregate::class], version = 2, exportSchema = true)

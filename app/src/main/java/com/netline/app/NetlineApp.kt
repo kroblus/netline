@@ -7,6 +7,8 @@ import com.netline.app.monitor.MonitorController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 
 class NetlineApp : Application() {
     val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
@@ -14,6 +16,8 @@ class NetlineApp : Application() {
         .addMigrations(NetlineDatabase.MIGRATION_1_2).build() }
     val repository by lazy { TrafficRepository(database) }
     val preferences by lazy { Preferences(this) }
+    val language by lazy { preferences.settings.map { it.language }
+        .stateIn(applicationScope, SharingStarted.Eagerly, defaultLanguage()) }
     val monitor by lazy { MonitorController(this) }
     override fun onCreate() {
         super.onCreate()

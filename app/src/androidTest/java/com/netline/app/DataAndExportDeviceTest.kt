@@ -11,6 +11,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.netline.app.data.*
 import com.netline.app.export.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +21,52 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class DataAndExportDeviceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    @Test fun chineseAndEnglishReportsRenderWithoutChangingData() = runBlocking {
+        val app = context.applicationContext as NetlineApp
+        val original = app.preferences.settings.first().language
+        val started = 1_792_114_200_000L
+        val samples = (0 until 10).map { index -> Sample(sessionId = 1, startedAt = started + index * 1000L,
+            endedAt = started + (index + 1) * 1000L, durationMs = 1000, received = index * 100L, sent = index * 10L, valid = true) }
+        val data = ChartExportDataBuilder.build(Session(1, started, started + 10000), samples, emptyList(), started, started + 10000)
+        try {
+            for (language in listOf("zh", "en")) {
+                app.preferences.language(language)
+                withTimeout(5000) { app.language.first { it == language } }
+                val expected = if (language == "zh") "01 / 网络流量统计报告" else "01 / NETWORK TRAFFIC REPORT"
+                assertEquals(expected, app.localizedString(R.string.report_heading))
+                val image = ChartExportRenderer(app).render(data)
+                try {
+                    image.file.copyTo(File(app.getExternalFilesDir(null), "TEST_REPORT_$language.png"), overwrite = true)
+                    val bitmap = BitmapFactory.decodeFile(image.file.absolutePath)!!
+                    assertEquals(1080, bitmap.width); assertEquals(1920, bitmap.height); bitmap.recycle()
+                    assertEquals(4500L, image.report.statistics.totalReceived)
+                } finally { image.file.delete() }
+            }
+        } finally { app.preferences.language(original) }
+    }
+    @Test fun deletingEndedSessionIsAtomicAndProtectsActiveAndOtherHistory() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, NetlineDatabase::class.java).build()
+        try {
+            val repo = TrafficRepository(db)
+            val ids = (0..2).map { index ->
+                val start = System.currentTimeMillis() + index * 2000
+                val id = repo.start(start)
+                repo.append(Sample(sessionId = id, startedAt = start, endedAt = start + 1000, durationMs = 1000, received = 100, sent = 10, valid = true))
+                if (index < 2) repo.end(id, start + 1000)
+                id
+            }
+            assertFalse(repo.deleteSession(ids[2]))
+            assertEquals(1, db.traffic().samples(ids[2]).size)
+            assertTrue(repo.deleteSession(ids[0]))
+            assertNull(db.traffic().session(ids[0]))
+            assertTrue(db.traffic().samples(ids[0]).isEmpty())
+            assertTrue(db.traffic().aggregates(ids[0]).isEmpty())
+            assertFalse(repo.deleteSession(ids[0]))
+            assertNotNull(db.traffic().session(ids[1]))
+            assertEquals(1, db.traffic().samples(ids[1]).size)
+            assertEquals(1, db.traffic().aggregates(ids[1]).size)
+        } finally { db.close() }
+    }
     @Test fun providerRejectsFilesOutsideExportDirectory() {
         val privateFile = File(context.filesDir, "not-shareable.txt").apply { writeText("test") }
         try {

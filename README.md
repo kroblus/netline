@@ -2,10 +2,14 @@
 
 个人自用的原生 Android 网络流量记录器。Kotlin / Jetpack Compose / Room / DataStore，Android 10+，Target SDK 36。
 
+1.2 新增：40dp 悬浮球（48dp 触控范围）、应用内中文/English 切换、历史记录长按删除。
+
 ## 使用
 
 - **MONITOR**：开始、停止真实设备流量记录，查看最近 30 分钟曲线。
 - **HISTORY**：选择任意单个会话并生成报告；中断的会话保留已提交数据。
+- **HISTORY → 长按记录 → 删除记录**：确认后删除该会话、采样和分钟汇总；取消不删除，正在记录的会话需先停止，已保存的报告图片不受影响。
+- **SETTINGS → 语言 / LANGUAGE**：选择中文或 English，立即更新界面、悬浮菜单及通知；新报告使用所选语言，选择保存在 DataStore，重开应用后保留。首次使用跟随系统的中文或回退到英文。
 - **SETTINGS → Enable Floating Ball**：先授权悬浮窗。单击开始/停止，拖动后吸边，长按打开主界面或隐藏。停止后悬浮球继续待机，隐藏不会结束记录。
 - **EXPORT CHART / SHARE REPORT**：完整会话、末尾 60 秒 / 5 分钟 / 15 分钟 / 1 小时或自定义本地日期时间。默认最近结束的会话，也可选择正在记录的会话。
 - **GENERATE PNG**：固定 1080 × 1920 瑞士风格海报；预览可双指缩放。**SAVE IMAGE** 保存到 `Pictures/NETLINE/`；**SHARE IMAGE** 直接打开系统分享，不要求先保存。
@@ -60,9 +64,9 @@ adb shell am instrument -w com.netline.app.test/androidx.test.runner.AndroidJUni
 
 `connectedDebugAndroidTest` 默认可能在测试结束或安装失败后清理安装包，使数据与权限重置，勿直接用于已有重要记录的个人手机。测试迁移、PNG 和异常数据使用隔离数据库；悬浮操作测试会在实际历史中留下短暂的真实采样会话。
 
-当前版本：1.1.1（修复后台失败提示）。Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Debug 使用当前电脑的默认调试签名，换电脑签名后可能无法覆盖安装，切勿为覆盖安装直接卸载而丢失记录。
+当前版本：1.2.0。Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Debug 使用当前电脑的默认调试签名，换电脑签名后可能无法覆盖安装，切勿为覆盖安装直接卸载而丢失记录。
 
-测试分层：JVM 精确统计与计数器异常、设备 Room 迁移 / PNG / MediaStore / 跨 UID 图片读取，以及真机上的悬浮操作。合成数据只存在隔离测试数据库，真实用户会话不会混入演示数据。详见 [验收记录](docs/VALIDATION.md)。
+测试分层：JVM 精确统计与计数器异常、设备 Room 迁移 / PNG / MediaStore / 跨 UID 图片读取，以及真机上的悬浮操作、中英文切换与长按删除。合成数据只存在隔离测试数据库，真实用户会话不会混入演示数据。详见 [1.2 验收记录](docs/VALIDATION-1.2.md)；[1.1 验收记录](docs/VALIDATION.md) 保留原版证据。
 
 ## 代码入口
 

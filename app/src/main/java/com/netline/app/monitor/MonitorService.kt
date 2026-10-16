@@ -44,13 +44,13 @@ class MonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         val notifications = getSystemService(NotificationManager::class.java)
-        notifications.createNotificationChannel(NotificationChannel(CHANNEL, "NETLINE controls", NotificationManager.IMPORTANCE_LOW))
+        notifications.createNotificationChannel(NotificationChannel(CHANNEL, localizedString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW))
         try {
             if (Build.VERSION.SDK_INT >= 34) startForeground(7, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             else startForeground(7, notification())
         } catch (e: Exception) {
             controller.update { it.copy(recordingState = RecordingState.IDLE, overlayEnabled = false,
-                error = "前台服务不可用：${e.localizedMessage}") }
+                error = localizedString(R.string.foreground_error, e.localizedMessage ?: "")) }
             stopSelf()
             return
         }
@@ -65,6 +65,11 @@ class MonitorService : Service() {
                 ball.render(controller.state.value)
                 notifications.notify(7, notification())
             } }
+        scope.launch { app.language.collect {
+            ball.languageChanged()
+            notifications.createNotificationChannel(NotificationChannel(CHANNEL, localizedString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW))
+            notifications.notify(7, notification())
+        } }
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (::ball.isInitialized) intent?.action?.let(::dispatch)
@@ -83,7 +88,7 @@ class MonitorService : Service() {
                         MonitorController.ENABLE -> {
                             if (!Settings.canDrawOverlays(this@MonitorService)) {
                                 controller.update { it.copy(overlayEnabled = false) }
-                                controller.fail("未授予悬浮窗权限，仍可使用主界面记录")
+                                controller.fail(localizedString(R.string.permission_denied))
                             } else {
                                 controller.update { it.copy(overlayEnabled = true) }
                                 ball.show()
@@ -101,7 +106,7 @@ class MonitorService : Service() {
                         ball.hide()
                         controller.update { it.copy(overlayEnabled = false, overlayVisible = false) }
                     }
-                    controller.fail("操作失败，请重试：${e.localizedMessage}")
+                    controller.fail(localizedString(R.string.operation_failed, localizedError(e)))
                     if (session == null) controller.update { it.copy(recordingState = RecordingState.IDLE) }
                 }
                 releaseIfIdle()
@@ -112,7 +117,7 @@ class MonitorService : Service() {
         if (session != null) return
         controller.update { it.copy(recordingState = RecordingState.STARTING, error = null) }
         val baseline = reading()
-        check(baseline.rx >= 0 && baseline.tx >= 0) { "设备不支持 TrafficStats 总流量计数器" }
+        check(baseline.rx >= 0 && baseline.tx >= 0) { localizedString(R.string.counter_unsupported) }
         val id = app.repository.start(baseline.wall)
         session = id
         lastPersistedAt = baseline.wall
@@ -128,7 +133,7 @@ class MonitorService : Service() {
                     runCatching { app.repository.end(id, lastPersistedAt, true) }
                     session = null
                     controller.update { it.copy(recordingState = RecordingState.IDLE, activeSessionId = null,
-                        error = "记录已安全停止，已写入的数据保留：${e.localizedMessage}") }
+                        error = localizedString(R.string.recording_failed, localizedError(e))) }
                     releaseIfIdle()
                 }
             }
@@ -139,7 +144,7 @@ class MonitorService : Service() {
         app.repository.append(sample)
         lastPersistedAt = maxOf(lastPersistedAt, sample.endedAt)
         controller.update { it.copy(recent = (it.recent + sample).takeLast(1800)) }
-        check(sample.gapReason != "System clock changed") { "系统时间已改变，请开始新的记录会话" }
+        check(sample.gapReason != "System clock changed") { localizedString(R.string.clock_changed) }
     }
     private suspend fun stopRecording() {
         val id = session ?: return
@@ -151,7 +156,7 @@ class MonitorService : Service() {
             app.repository.end(id, lastPersistedAt)
         } catch (e: Exception) {
             runCatching { app.repository.end(id, lastPersistedAt, true) }
-            controller.fail("记录停止，最后一段写入失败：${e.localizedMessage}")
+            controller.fail(localizedString(R.string.stop_failed, localizedError(e)))
         } finally {
             sampler = null
             session = null
@@ -170,11 +175,11 @@ class MonitorService : Service() {
         val recording = state.recordingState == RecordingState.RECORDING || state.recordingState == RecordingState.STOPPING
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_netline)
-            .setContentTitle(if (recording) "NETLINE · 正在记录" else "NETLINE · 悬浮球待机")
-            .setContentText(if (recording) "本机网络流量记录中 · 点击打开" else "悬浮球可开始新记录 · 待机不采样")
+            .setContentTitle(localizedString(if (recording) R.string.notification_recording else R.string.notification_idle))
+            .setContentText(localizedString(if (recording) R.string.notification_recording_info else R.string.notification_idle_info))
             .setContentIntent(open).setOngoing(true).setSilent(true).setOnlyAlertOnce(true)
-        if (recording) builder.addAction(0, "停止记录", action(MonitorController.STOP, 1))
-        if (state.overlayEnabled) builder.addAction(0, "隐藏悬浮球", action(MonitorController.HIDE, 2))
+        if (recording) builder.addAction(0, localizedString(R.string.stop_recording), action(MonitorController.STOP, 1))
+        if (state.overlayEnabled) builder.addAction(0, localizedString(R.string.hide_ball), action(MonitorController.HIDE, 2))
         return builder.build()
     }
     private fun action(value: String, code: Int) = PendingIntent.getService(this, code,

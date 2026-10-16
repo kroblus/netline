@@ -11,6 +11,8 @@ import android.provider.Settings
 import android.view.*
 import android.widget.*
 import com.netline.app.MainActivity
+import com.netline.app.R
+import com.netline.app.localizedString
 import com.netline.app.data.Preferences
 import com.netline.app.monitor.*
 import kotlinx.coroutines.*
@@ -23,7 +25,7 @@ class FloatingBallController(
     private val scope: CoroutineScope
 ) {
     private val wm = context.getSystemService(WindowManager::class.java)
-    private val size = (56 * context.resources.displayMetrics.density).toInt()
+    private val size = (48 * context.resources.displayMetrics.density).toInt()
     private var view: FloatingBallView? = null
     private var gesture: FloatingBallGestureHandler? = null
     private var menu: PopupWindow? = null
@@ -99,7 +101,7 @@ class FloatingBallController(
         catch (_: RuntimeException) {
             hide()
             controller.update { it.copy(overlayEnabled = false, overlayVisible = false,
-                error = "悬浮球不可用，请回到设置重新启用") }
+                error = context.localizedString(R.string.overlay_unavailable)) }
             controller.request(MonitorController.HIDE)
         }
     }
@@ -126,8 +128,8 @@ class FloatingBallController(
                 setOnClickListener { menu?.dismiss(); action() }
             })
         }
-        item("OPEN NETLINE") { context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
-        item("HIDE FLOATING BALL") { controller.request(MonitorController.HIDE) }
+        item(context.localizedString(R.string.open_netline)) { context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
+        item(context.localizedString(R.string.hide_ball)) { controller.request(MonitorController.HIDE) }
         menu = PopupWindow(layout, (224 * context.resources.displayMetrics.density).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT, false).apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             isOutsideTouchable = true
@@ -141,6 +143,7 @@ class FloatingBallController(
         }
     }
     fun render(state: MonitorState) { view?.state = state.recordingState }
+    fun languageChanged() { menu?.dismiss(); view?.state = controller.state.value.recordingState }
     fun reposition() { menu?.dismiss(); animator?.cancel(); position(); update() }
     suspend fun reset() { relativeX = 1f; relativeY = .35f; preferences.position(relativeX, relativeY); reposition() }
     fun hide() {

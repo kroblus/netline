@@ -7,6 +7,8 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.netline.app.R
+import com.netline.app.localizedString
 
 class ImageSaveManager(private val context: Context) {
     suspend fun save(image: ExportImage) = withContext(Dispatchers.IO) {
@@ -35,7 +37,7 @@ class ImageShareManager(private val context: Context) {
             clipData = ClipData.newUri(context.contentResolver, "NETLINE report", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        try { context.startActivity(Intent.createChooser(send, "SHARE NETLINE REPORT")) }
+        try { context.startActivity(Intent.createChooser(send, context.localizedString(R.string.share_report_title))) }
         catch (e: ActivityNotFoundException) { throw IllegalStateException("没有可接收图片的应用", e) }
     }
 }

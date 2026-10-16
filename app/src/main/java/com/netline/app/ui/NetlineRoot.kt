@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
@@ -28,6 +30,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.netline.app.data.*
 import com.netline.app.export.*
 import com.netline.app.monitor.*
+import com.netline.app.*
+import com.netline.app.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -37,16 +41,21 @@ val Red = Color(0xFFE3342F)
 val Muted = Color(0xFF6B6B65)
 val Rule = Color(0xFFD3D3CD)
 
+@Composable private fun tr(id: Int, vararg args: Any): String = stringResource(id, *args)
+
 @Composable
 fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineViewModel = viewModel()) {
     val monitor by vm.monitor.collectAsStateWithLifecycle()
     val sessions by vm.sessions.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val language by vm.app.language.collectAsStateWithLifecycle()
     val export by vm.export.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("MONITOR") }
     var exportSession by rememberSaveable { mutableStateOf<Long?>(null) }
     BackHandler(enabled = page == "EXPORT") { if (!export.busy) page = "HISTORY" }
     val context = LocalContext.current
+    val translated = remember(context, language) { context.localizedContext(language) }
+    CompositionLocalProvider(LocalContext provides translated, LocalResources provides translated.resources) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, secondary = Red, background = Paper, surface = Paper, onSurface = Ink),
         typography = Typography(bodyLarge = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp))) {
         Surface(color = Paper, modifier = Modifier.fillMaxSize()) {
@@ -55,7 +64,7 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
                     Box(Modifier.width(7.dp).height(31.dp).background(Red))
                     Text("NETLINE", fontSize = 32.sp, fontWeight = FontWeight.Black, letterSpacing = (-1.6).sp, modifier = Modifier.padding(start = 9.dp))
                     Spacer(Modifier.weight(1f))
-                    Text("LOCAL\nV 1.1", color = Muted, fontSize = 10.sp, lineHeight = 13.sp, fontFamily = FontFamily.Monospace)
+                    Text(tr(R.string.local_version), color = Muted, fontSize = 10.sp, lineHeight = 13.sp, fontFamily = FontFamily.Monospace)
                 }
                 HorizontalDivider(color = Ink, thickness = 2.dp, modifier = Modifier.padding(horizontal = 24.dp))
                 Box(Modifier.weight(1f)) {
@@ -64,13 +73,14 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
                             exportSession = sessions.firstOrNull { it.endedAt != null }?.id ?: monitor.activeSessionId
                             vm.clearExport(); page = "EXPORT"
                         }
-                        "HISTORY" -> HistoryScreen(sessions) { exportSession = it; vm.clearExport(); page = "EXPORT" }
+                        "HISTORY" -> HistoryScreen(sessions, onDelete = vm::deleteSession,
+                            onSelect = { exportSession = it; vm.clearExport(); page = "EXPORT" })
                         "SETTINGS" -> SettingsScreen(monitor, settings, onOverlay, vm)
                         "EXPORT" -> ExportPreviewScreen(sessions, exportSession, settings.range, export,
                             onSelect = { exportSession = it; vm.clearExport() }, onGenerate = vm::generate,
                             onSave = vm::save, onBack = { page = "HISTORY" }, onShare = {
                                 runCatching { export.image?.let { ImageShareManager(context).share(it.file) } }
-                                    .onFailure { Toast.makeText(context, it.localizedMessage, Toast.LENGTH_LONG).show() }
+                                    .onFailure { Toast.makeText(context, context.localizedError(it), Toast.LENGTH_LONG).show() }
                             })
                     }
                 }
@@ -80,13 +90,14 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
                         listOf("MONITOR", "HISTORY", "SETTINGS").forEachIndexed { index, label ->
                             TextButton(onClick = { page = label }, modifier = Modifier.weight(1f)) {
                                 Column { Text("0${index + 1}", fontSize = 10.sp, color = if (page == label) Red else Muted)
-                                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (page == label) Ink else Muted) }
+                                    Text(tr(when (label) { "MONITOR" -> R.string.monitor; "HISTORY" -> R.string.history; else -> R.string.settings }), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (page == label) Ink else Muted) }
                             }
                         }
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -116,34 +127,34 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Label("DEVICE TRAFFIC / 设备流量")
+            Label(tr(R.string.device_traffic))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(if (recording) Red else Muted)); Spacer(Modifier.width(6.dp))
-                Text(state.recordingState.name, fontSize = 10.sp, color = if (recording) Red else Muted, fontFamily = FontFamily.Monospace)
+                Text(tr(when (state.recordingState) { RecordingState.IDLE -> R.string.idle; RecordingState.STARTING -> R.string.starting; RecordingState.RECORDING -> R.string.recording; RecordingState.STOPPING -> R.string.stopping }), fontSize = 10.sp, color = if (recording) Red else Muted, fontFamily = FontFamily.Monospace)
             }
         }
-        Text("Every byte.\nIn sight.", fontSize = 45.sp, lineHeight = 45.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp,
+        Text(tr(R.string.tagline), fontSize = 45.sp, lineHeight = 45.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp,
             modifier = Modifier.padding(top = 22.dp, bottom = 28.dp))
-        Label("↓ DOWNLOAD")
+        Label(tr(R.string.download))
         Text(if (last != null && recording) speed(last.down) else "— B/s", fontSize = 43.sp, letterSpacing = (-1.5).sp,
             fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) { Label("↑ UPLOAD", Modifier.width(105.dp), Red)
+        Row(verticalAlignment = Alignment.CenterVertically) { Label(tr(R.string.upload), Modifier.width(105.dp), Red)
             Text(if (last != null && recording) speed(last.up) else "— B/s", fontSize = 24.sp, color = Red, fontWeight = FontWeight.Medium) }
-        SectionTitle("01", "SPEED OVER TIME")
+        SectionTitle("01", tr(R.string.speed_over_time))
         SpeedChart(report, Modifier.fillMaxWidth().height(145.dp))
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 22.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label(report?.let { timestamp(it.from) } ?: "NO SAMPLES")
-            Label(report?.let { timestamp(it.to) } ?: "LOCAL ONLY")
+            Label(report?.let { timestamp(it.from) } ?: tr(R.string.no_samples))
+            Label(report?.let { timestamp(it.to) } ?: tr(R.string.local_only))
         }
         Action(when (state.recordingState) {
-            RecordingState.IDLE -> "START RECORDING"
-            RecordingState.RECORDING -> "STOP RECORDING"
-            RecordingState.STARTING -> "STARTING…"
-            RecordingState.STOPPING -> "SAVING…"
+            RecordingState.IDLE -> tr(R.string.start_recording)
+            RecordingState.RECORDING -> tr(R.string.stop_recording)
+            RecordingState.STARTING -> tr(R.string.starting)
+            RecordingState.STOPPING -> tr(R.string.stopping)
         }, enabled = !busy, red = recording, onClick = onToggle)
         OutlinedButton(onClick = onExport, enabled = sessions.isNotEmpty(), shape = RectangleShape,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp)) { Text("EXPORT CHART", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-        Text("本机流量 · 1 秒采样 · 无云端上传\n锁屏或系统休眠可能产生采样间断。", color = Muted, fontSize = 11.sp,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp)) { Text(tr(R.string.export_chart), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        Text(tr(R.string.monitor_info), color = Muted, fontSize = 11.sp,
             lineHeight = 17.sp, modifier = Modifier.padding(top = 16.dp, bottom = 24.dp))
     }
 }
@@ -173,56 +184,81 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
     }
 }
 
-@Composable private fun HistoryScreen(sessions: List<Session>, onSelect: (Long) -> Unit) {
+@Composable private fun HistoryScreen(sessions: List<Session>, onSelect: (Long) -> Unit, onDelete: (Long) -> Unit) {
+    var menuId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var deletingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val deleting = sessions.firstOrNull { it.id == deletingId }
+    if (deleting != null) AlertDialog(onDismissRequest = { deletingId = null },
+        containerColor = Paper, shape = RectangleShape, titleContentColor = Ink, textContentColor = Ink,
+        title = { Text(tr(R.string.delete_title)) },
+        text = { Text(tr(R.string.delete_body, timestamp(deleting.startedAt, "yyyy.MM.dd HH:mm:ss"))) },
+        confirmButton = { TextButton(onClick = { deletingId = null; onDelete(deleting.id) }) { Text(tr(R.string.delete), color = Red) } },
+        dismissButton = { TextButton(onClick = { deletingId = null }) { Text(tr(R.string.cancel)) } })
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-        item { SectionTitle("02", "RECORDING ARCHIVE"); Text("History.", fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp); Spacer(Modifier.height(20.dp)) }
-        if (sessions.isEmpty()) item { Text("还没有记录。开始一次采样后，会话会保存在这里。", color = Muted, modifier = Modifier.padding(vertical = 20.dp)) }
+        item { SectionTitle("02", tr(R.string.archive)); Text(tr(R.string.history_title), fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp); Spacer(Modifier.height(20.dp)) }
+        if (sessions.isEmpty()) item { Text(tr(R.string.history_empty), color = Muted, modifier = Modifier.padding(vertical = 20.dp)) }
         items(sessions, key = { it.id }) { session ->
-            Column(Modifier.fillMaxWidth().clickable { onSelect(session.id) }.padding(vertical = 16.dp)) {
+            Box {
+            Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onSelect(session.id) }, onLongClick = { menuId = session.id }).padding(vertical = 16.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Label(timestamp(session.startedAt, "yyyy.MM.dd"), color = Ink)
-                    Label(when { session.endedAt == null -> "RECORDING"; session.interrupted -> "INTERRUPTED"; else -> "SAVED" }, color = if (session.endedAt == null) Red else Muted)
+                    Label(when { session.endedAt == null -> tr(R.string.recording); session.interrupted -> tr(R.string.interrupted); else -> tr(R.string.saved) }, color = if (session.endedAt == null) Red else Muted)
                 }
-                Text("${timestamp(session.startedAt)} — ${session.endedAt?.let { timestamp(it) } ?: "LIVE"}", fontSize = 22.sp, modifier = Modifier.padding(vertical = 9.dp))
-                Label("SESSION ${session.id.toString().padStart(4, '0')}   /   SHARE REPORT →")
+                Text("${timestamp(session.startedAt)} — ${session.endedAt?.let { timestamp(it) } ?: tr(R.string.live)}", fontSize = 22.sp, modifier = Modifier.padding(vertical = 9.dp))
+                Label(tr(R.string.session_share, session.id.toString().padStart(4, '0')))
+            }
+            DropdownMenu(expanded = menuId == session.id, onDismissRequest = { menuId = null },
+                containerColor = Paper, shape = RectangleShape, tonalElevation = 0.dp, shadowElevation = 0.dp,
+                border = BorderStroke(1.dp, Rule)) {
+                DropdownMenuItem(enabled = session.endedAt != null,
+                    text = { Text(tr(if (session.endedAt == null) R.string.delete_active else R.string.delete_recording), color = if (session.endedAt == null) Muted else Red) },
+                    onClick = { menuId = null; deletingId = session.id })
+            }
             }
             HorizontalDivider(color = Rule)
         }
-        item { Spacer(Modifier.height(24.dp)); Text("原始采样保留 7 天，之后保留分钟汇总。\n间断、零速率与中断会话均如实保留。", fontSize = 12.sp, color = Muted); Spacer(Modifier.height(24.dp)) }
+        item { Spacer(Modifier.height(24.dp)); Text(tr(R.string.history_info), fontSize = 12.sp, color = Muted); Spacer(Modifier.height(24.dp)) }
     }
 }
 
 @Composable private fun SettingsScreen(state: MonitorState, settings: AppSettings, onOverlay: (Boolean) -> Unit, vm: NetlineViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
-        SectionTitle("03", "PREFERENCES")
-        Text("Less, but\nbetter.", fontSize = 44.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp)
-        SectionTitle("A", "FLOATING CONTROLS")
+        SectionTitle("03", tr(R.string.preferences))
+        Text(tr(R.string.settings_title), fontSize = 44.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp)
+        SectionTitle("A", tr(R.string.language))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilterChip(selected = settings.language == "zh", onClick = { vm.language("zh") }, label = { Text("中文") }, shape = RectangleShape,
+                border = BorderStroke(1.dp, Rule), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Ink, selectedLabelColor = Color.White))
+            FilterChip(selected = settings.language == "en", onClick = { vm.language("en") }, label = { Text("English") }, shape = RectangleShape,
+                border = BorderStroke(1.dp, Rule), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Ink, selectedLabelColor = Color.White))
+        }
+        SectionTitle("B", tr(R.string.floating_controls))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Enable Floating Ball", fontSize = 16.sp, fontWeight = FontWeight.Medium); Label("ENABLE FLOATING BALL", Modifier.padding(top = 5.dp)) }
+            Column(Modifier.weight(1f)) { Text(tr(R.string.enable_ball), fontSize = 16.sp, fontWeight = FontWeight.Medium); Label(tr(R.string.enable_ball_label), Modifier.padding(top = 5.dp)) }
             Switch(checked = state.overlayEnabled, onCheckedChange = onOverlay)
         }
-        Text("需要单独的“显示在其他应用上层”权限。单击开始/停止，拖动移动，长按打开菜单。停止记录后保持待机；关闭悬浮球不会结束正在进行的记录。", fontSize = 12.sp, color = Muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 12.dp))
-        TextButton(onClick = vm::positionReset) { Text("FLOATING BALL POSITION: RESET", fontSize = 11.sp) }
-        Text("系统受保护界面可能隐藏悬浮球；系统终止后从此处重新启用。不会开机自启或循环重启。", fontSize = 11.sp, color = Muted, lineHeight = 17.sp)
+        Text(tr(R.string.overlay_explanation), fontSize = 12.sp, color = Muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 12.dp))
+        TextButton(onClick = vm::positionReset) { Text(tr(R.string.reset_ball), fontSize = 11.sp) }
+        Text(tr(R.string.overlay_limit), fontSize = 11.sp, color = Muted, lineHeight = 17.sp)
         HorizontalDivider(color = Rule, modifier = Modifier.padding(top = 20.dp))
-        SectionTitle("B", "EXPORT SETTINGS")
-        Text("Default Export Range", fontWeight = FontWeight.Medium)
+        SectionTitle("C", tr(R.string.export_settings))
+        Text(tr(R.string.default_range), fontWeight = FontWeight.Medium)
         RangeSelector(settings.range, EXPORT_RANGES.filter { it != "Custom Range" }, vm::defaultRange)
-        Text("EXPORT IMAGE INFORMATION", fontSize = 11.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 14.dp))
-        Text("PNG · 1080 × 1920 · 固定瑞士风格\n有效区间字节数 ÷ 有效时长计算均速。缺失区间不补零，分钟汇总不伪造秒级曲线。", fontSize = 12.sp, color = Muted, lineHeight = 19.sp, modifier = Modifier.padding(vertical = 12.dp))
-        OutlinedButton(onClick = vm::clearCache, shape = RectangleShape) { Text("CLEAR TEMPORARY EXPORT CACHE", fontSize = 10.sp) }
+        Text(tr(R.string.image_info), fontSize = 11.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 14.dp))
+        Text(tr(R.string.export_info), fontSize = 12.sp, color = Muted, lineHeight = 19.sp, modifier = Modifier.padding(vertical = 12.dp))
+        OutlinedButton(onClick = vm::clearCache, shape = RectangleShape) { Text(tr(R.string.clear_cache), fontSize = 10.sp) }
         val export by vm.export.collectAsStateWithLifecycle()
         export.message?.let { Text(it, color = Red, fontSize = 12.sp) }
         HorizontalDivider(color = Rule, modifier = Modifier.padding(vertical = 20.dp))
-        Label("NETLINE 1.1 / PERSONAL EDITION")
-        Text("全部记录仅保存在本机。TrafficStats 包含设备范围流量，可能受系统计数器、VPN、网络接口和休眠限制；不代表测速服务器的带宽测试。", color = Muted, fontSize = 11.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp, bottom = 30.dp))
+        Label(tr(R.string.edition))
+        Text(tr(R.string.privacy_info), color = Muted, fontSize = 11.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp, bottom = 30.dp))
     }
 }
 
 @Composable fun RangeSelector(selected: String, options: List<String> = EXPORT_RANGES, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 10.dp)) {
         options.forEach { label -> FilterChip(selected = selected == label, onClick = { onSelect(label) },
-            shape = RectangleShape, label = { Text(label, fontSize = 10.sp) }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Ink, selectedLabelColor = Color.White)) }
+            shape = RectangleShape, label = { Text(tr(rangeLabel(label)), fontSize = 10.sp) }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Ink, selectedLabelColor = Color.White)) }
     }
 }
 
@@ -237,12 +273,12 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
     var start by rememberSaveable(selectedId) { mutableStateOf(selected?.let { timestamp(it.startedAt, "yyyy-MM-dd HH:mm:ss.SSS") } ?: "") }
     var end by rememberSaveable(selectedId) { mutableStateOf(selected?.let { timestamp(it.endedAt ?: System.currentTimeMillis(), "yyyy-MM-dd HH:mm:ss.SSS") } ?: "") }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
-        TextButton(onClick = onBack, enabled = !state.busy, contentPadding = PaddingValues(0.dp)) { Text("← BACK", fontSize = 11.sp) }
-        Text("The report.", fontSize = 40.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1.8).sp)
-        SectionTitle("01", "SELECT ONE SESSION")
+        TextButton(onClick = onBack, enabled = !state.busy, contentPadding = PaddingValues(0.dp)) { Text(tr(R.string.back), fontSize = 11.sp) }
+        Text(tr(R.string.report_title), fontSize = 40.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1.8).sp)
+        SectionTitle("01", tr(R.string.select_session))
         Box {
             OutlinedButton(onClick = { expanded = true }, enabled = !state.busy && sessions.isNotEmpty(), shape = RectangleShape, modifier = Modifier.fillMaxWidth()) {
-                Text(selected?.let { "#${it.id}  ${timestamp(it.startedAt, "MM.dd HH:mm:ss")}  /  ${if (it.endedAt == null) "LIVE" else "SAVED"}" } ?: "SELECT RECORDING", fontSize = 12.sp)
+                Text(selected?.let { "#${it.id}  ${timestamp(it.startedAt, "MM.dd HH:mm:ss")}  /  ${if (it.endedAt == null) tr(R.string.live) else tr(R.string.saved)}" } ?: tr(R.string.select_recording), fontSize = 12.sp)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
                 sessions.forEach { session -> DropdownMenuItem(text = { Text("#${session.id}  ${timestamp(session.startedAt, "yyyy.MM.dd HH:mm:ss")}", fontSize = 12.sp) },
@@ -251,16 +287,16 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
         }
         RangeSelector(range, onSelect = { if (!state.busy) range = it })
         if (range == "Custom Range") {
-            OutlinedTextField(start, { start = it }, label = { Text("START · yyyy-MM-dd HH:mm:ss[.SSS]") }, singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(start, { start = it }, label = { Text(tr(R.string.start_input)) }, singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(end, { end = it }, label = { Text("END · yyyy-MM-dd HH:mm:ss[.SSS]") }, singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(end, { end = it }, label = { Text(tr(R.string.end_input)) }, singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
         }
-        Text("固定范围取此会话末尾；仅导出已持久化数据。记录中可导出，不会暂停采样。自定义范围使用设备本地时间。", fontSize = 11.sp, color = Muted, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 14.dp))
-        Action(if (state.busy) "PROCESSING…" else "GENERATE PNG", !state.busy && selected != null) { selected?.id?.let { onGenerate(it, range, start, end) } }
+        Text(tr(R.string.range_explanation), fontSize = 11.sp, color = Muted, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 14.dp))
+        Action(if (state.busy) tr(R.string.processing) else tr(R.string.generate_png), !state.busy && selected != null) { selected?.id?.let { onGenerate(it, range, start, end) } }
         state.message?.let { Text(it, color = Red, fontSize = 12.sp, modifier = Modifier.padding(vertical = 14.dp)) }
         state.image?.let { image ->
-            SectionTitle("02", "IMAGE PREVIEW / PINCH TO ZOOM")
+            SectionTitle("02", tr(R.string.image_preview))
             // Decode at half resolution for the preview; the shared PNG stays at 1080 × 1920.
             val bitmap by produceState<android.graphics.Bitmap?>(null, image.file) {
                 value = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(image.file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 2 }) }
@@ -277,15 +313,15 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
             Box(Modifier.fillMaxWidth().aspectRatio(1080f / 1920f).clip(RectangleShape).background(Rule)
                 .onSizeChanged { previewSize = it }
                 .transformable(state = zoomState, canPan = { scale > 1f })) {
-                bitmap?.let { Image(it.asImageBitmap(), contentDescription = "NETLINE 网络流量报告预览", modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; translationX = pan.x; translationY = pan.y }) }
+                bitmap?.let { Image(it.asImageBitmap(), contentDescription = tr(R.string.preview_description), modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; translationX = pan.x; translationY = pan.y }) }
             }
-            image.report.notes.forEach { Text(it, fontSize = 10.sp, color = Muted, modifier = Modifier.padding(top = 5.dp)) }
+            image.report.notes.forEach { Text(LocalContext.current.reportNote(it), fontSize = 10.sp, color = Muted, modifier = Modifier.padding(top = 5.dp)) }
             Spacer(Modifier.height(16.dp))
-            Action("SAVE IMAGE", !state.busy, onClick = onSave)
+            Action(tr(R.string.save_image), !state.busy, onClick = onSave)
             Spacer(Modifier.height(8.dp))
-            Action("SHARE IMAGE", !state.busy, red = true, onClick = onShare)
+            Action(tr(R.string.share_image), !state.busy, red = true, onClick = onShare)
             Spacer(Modifier.height(28.dp))
         }
-        if (sessions.isEmpty()) Text("没有记录可导出，请先开始记录。", modifier = Modifier.padding(vertical = 20.dp), color = Muted)
+        if (sessions.isEmpty()) Text(tr(R.string.no_recording), modifier = Modifier.padding(vertical = 20.dp), color = Muted)
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import java.io.File
 
@@ -25,6 +26,10 @@ class MonitorDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app = ApplicationProvider.getApplicationContext<NetlineApp>()
     private val device = UiDevice.getInstance(instrumentation)
+    @Before fun english() = runBlocking {
+        app.preferences.language("en")
+        waitFor("English loaded") { app.language.value == "en" }
+    }
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
     private fun waitFor(message: String, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + 10000
@@ -37,35 +42,35 @@ class MonitorDeviceTest {
             main { app.monitor.request(MonitorController.ENABLE) }
             waitFor("overlay shown") { app.monitor.state.value.overlayVisible }
             device.pressHome()
-            val idle = device.wait(Until.findObject(By.desc("开始记录")), 5000)
+            val idle = device.wait(Until.findObject(By.desc(app.localizedString(R.string.start_recording))), 5000)
             assertNotNull("Visible over launcher", idle)
             idle.click()
             waitFor("real session started") { app.monitor.state.value.recordingState == RecordingState.RECORDING }
             val first = app.monitor.state.value.activeSessionId!!
             SystemClock.sleep(2200)
             assertTrue(app.database.traffic().samples(first).isNotEmpty())
-            assertNotNull(device.wait(Until.findObject(By.desc("停止记录")), 3000))
-            device.findObject(By.desc("停止记录")).click()
+            assertNotNull(device.wait(Until.findObject(By.desc(app.localizedString(R.string.stop_recording))), 3000))
+            device.findObject(By.desc(app.localizedString(R.string.stop_recording))).click()
             waitFor("stopped and still visible") { app.monitor.state.value.recordingState == RecordingState.IDLE && app.monitor.state.value.overlayVisible }
             assertNotNull(app.database.traffic().session(first)!!.endedAt)
             val beforeDrag = app.repository.sessions.first().size
-            val ball = device.findObject(By.desc("开始记录"))
+            val ball = device.findObject(By.desc(app.localizedString(R.string.start_recording)))
             val bounds = ball.visibleBounds
             device.swipe(bounds.centerX(), bounds.centerY(), device.displayWidth / 2, device.displayHeight / 2, 25)
             SystemClock.sleep(500)
             assertEquals(RecordingState.IDLE, app.monitor.state.value.recordingState)
             assertEquals(beforeDrag, app.repository.sessions.first().size)
-            val moved = device.findObject(By.desc("开始记录")).visibleBounds
+            val moved = device.findObject(By.desc(app.localizedString(R.string.start_recording))).visibleBounds
             device.swipe(moved.centerX(), moved.centerY(), moved.centerX(), moved.centerY(), 100)
-            assertNotNull(device.wait(Until.findObject(By.text("OPEN NETLINE")), 3000))
+            assertNotNull(device.wait(Until.findObject(By.text(app.localizedString(R.string.open_netline))), 3000))
             assertEquals(RecordingState.IDLE, app.monitor.state.value.recordingState)
             device.click(moved.centerX(), moved.centerY())
             SystemClock.sleep(500)
-            assertFalse("Outside touch dismisses menu", device.hasObject(By.text("OPEN NETLINE")))
+            assertFalse("Outside touch dismisses menu", device.hasObject(By.text(app.localizedString(R.string.open_netline))))
             assertEquals("Dismissing menu must not start recording", RecordingState.IDLE, app.monitor.state.value.recordingState)
             device.swipe(moved.centerX(), moved.centerY(), moved.centerX(), moved.centerY(), 100)
-            assertNotNull(device.wait(Until.findObject(By.text("OPEN NETLINE")), 3000))
-            device.findObject(By.text("OPEN NETLINE")).click()
+            assertNotNull(device.wait(Until.findObject(By.text(app.localizedString(R.string.open_netline))), 3000))
+            device.findObject(By.text(app.localizedString(R.string.open_netline))).click()
             assertTrue(device.wait(Until.hasObject(By.text("NETLINE")), 5000))
             main { repeat(30) { app.monitor.toggle() } }
             waitFor("only one new session") { app.monitor.state.value.recordingState == RecordingState.RECORDING }
@@ -76,15 +81,15 @@ class MonitorDeviceTest {
             main { app.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com/")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             SystemClock.sleep(1200)
             assertNotEquals("Browser opened outside NETLINE", "com.netline.app", device.currentPackageName)
-            assertNotNull("Visible over browser", device.wait(Until.findObject(By.desc("停止记录")), 5000))
+            assertNotNull("Visible over browser", device.wait(Until.findObject(By.desc(app.localizedString(R.string.stop_recording))), 5000))
             main { app.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             SystemClock.sleep(1000)
             assertEquals("com.android.settings", device.currentPackageName)
-            assertNotNull("Visible over another app", device.wait(Until.findObject(By.desc("停止记录")), 5000))
+            assertNotNull("Visible over another app", device.wait(Until.findObject(By.desc(app.localizedString(R.string.stop_recording))), 5000))
             try {
                 device.setOrientationLeft()
                 SystemClock.sleep(1400)
-                val rotated = device.wait(Until.findObject(By.desc("停止记录")), 5000)!!.visibleBounds
+                val rotated = device.wait(Until.findObject(By.desc(app.localizedString(R.string.stop_recording))), 5000)!!.visibleBounds
                 assertTrue(rotated.left >= 0 && rotated.right <= device.displayWidth)
                 assertTrue(rotated.top >= 0 && rotated.bottom <= device.displayHeight)
             } finally { device.setOrientationNatural(); device.unfreezeRotation() }
@@ -99,9 +104,9 @@ class MonitorDeviceTest {
             waitFor("hide leaves recording running") { !app.monitor.state.value.overlayVisible && app.monitor.state.value.recordingState == RecordingState.RECORDING }
             assertNull(app.database.traffic().session(second)!!.endedAt)
             device.openNotification()
-            val notificationTitle = device.wait(Until.findObject(By.text("NETLINE · 正在记录")), 5000)
+            val notificationTitle = device.wait(Until.findObject(By.text(app.localizedString(R.string.notification_recording))), 5000)
             assertNotNull(notificationTitle)
-            if (!device.hasObject(By.text("停止记录"))) {
+            if (!device.hasObject(By.text(app.localizedString(R.string.stop_recording)))) {
                 var ancestor = notificationTitle
                 for (level in 0 until 8) {
                     val expand = ancestor?.findObject(By.res("android", "expand_button"))
@@ -109,7 +114,7 @@ class MonitorDeviceTest {
                     ancestor = ancestor?.parent
                 }
             }
-            val stop = device.wait(Until.findObject(By.text("停止记录")), 5000)
+            val stop = device.wait(Until.findObject(By.text(app.localizedString(R.string.stop_recording))), 5000)
             assertNotNull("Notification exposes stop action", stop)
             stop.click()
             waitFor("notification path stops and persists") { app.monitor.state.value.recordingState == RecordingState.IDLE }

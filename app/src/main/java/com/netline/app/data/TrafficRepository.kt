@@ -13,6 +13,7 @@ class TrafficRepository(val db: NetlineDatabase) {
     private val initialization = Mutex()
     private var initialized = false
     val sessions = dao.observeSessions()
+    suspend fun deleteSession(id: Long): Boolean = dao.deleteEndedSession(id)
     suspend fun initialize() = initialization.withLock {
         if (!initialized) {
             db.withTransaction {
