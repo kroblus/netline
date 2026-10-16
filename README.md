@@ -60,7 +60,7 @@ adb shell am instrument -w com.netline.app.test/androidx.test.runner.AndroidJUni
 
 `connectedDebugAndroidTest` 默认可能在测试结束或安装失败后清理安装包，使数据与权限重置，勿直接用于已有重要记录的个人手机。测试迁移、PNG 和异常数据使用隔离数据库；悬浮操作测试会在实际历史中留下短暂的真实采样会话。
 
-Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Debug 使用当前电脑的默认调试签名，换电脑签名后可能无法覆盖安装，切勿为覆盖安装直接卸载而丢失记录。
+当前版本：1.1.1（修复后台失败提示）。Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。Debug 使用当前电脑的默认调试签名，换电脑签名后可能无法覆盖安装，切勿为覆盖安装直接卸载而丢失记录。
 
 测试分层：JVM 精确统计与计数器异常、设备 Room 迁移 / PNG / MediaStore / 跨 UID 图片读取，以及真机上的悬浮操作。合成数据只存在隔离测试数据库，真实用户会话不会混入演示数据。详见 [验收记录](docs/VALIDATION.md)。
 

@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.room.Room
 import com.netline.app.data.*
 import com.netline.app.monitor.MonitorController
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 class NetlineApp : Application() {
     val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
@@ -12,4 +15,16 @@ class NetlineApp : Application() {
     val repository by lazy { TrafficRepository(database) }
     val preferences by lazy { Preferences(this) }
     val monitor by lazy { MonitorController(this) }
+    override fun onCreate() {
+        super.onCreate()
+        // Collect for the process lifetime so overlay failures are explained even when the Activity is stopped.
+        applicationScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            monitor.state.map { it.error }.distinctUntilChanged().collect { message ->
+                if (message != null) {
+                    android.widget.Toast.makeText(this@NetlineApp, message, android.widget.Toast.LENGTH_LONG).show()
+                    monitor.clearError()
+                }
+            }
+        }
+    }
 }

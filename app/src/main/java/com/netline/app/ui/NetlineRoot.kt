@@ -47,7 +47,6 @@ fun NetlineRoot(onToggle: () -> Unit, onOverlay: (Boolean) -> Unit, vm: NetlineV
     var exportSession by rememberSaveable { mutableStateOf<Long?>(null) }
     BackHandler(enabled = page == "EXPORT") { if (!export.busy) page = "HISTORY" }
     val context = LocalContext.current
-    LaunchedEffect(monitor.error) { monitor.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.app.monitor.clearError() } }
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, secondary = Red, background = Paper, surface = Paper, onSurface = Ink),
         typography = Typography(bodyLarge = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp))) {
         Surface(color = Paper, modifier = Modifier.fillMaxSize()) {
